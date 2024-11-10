@@ -30,4 +30,5 @@ huggingface-cli download tencent/Hunyuan3D-1 --local-dir ./weights
 顺便我阉割混元1.1文生图，帮助大家自由选择模型生成
 顺便，我做了个预处理，处理图片到1024*1024，记得第一次用我的预处理插件，选一下颜色，不然会报错，我也不知道为什么，知道的可以教我
 以上
-![image](https://github.com/user-attachments/assets/eb032ef1-394e-40a9-9b41-2e03c8186dc6)
+![image](https://github.com/user-attachments/assets/eb032ef1-394e-40a9-9b41-2e03c8186dc6)![output](https://github.com/user-attachments/assets/de5c048e-eca6-4d66-a3af-9fccf4a59a7f)
+
