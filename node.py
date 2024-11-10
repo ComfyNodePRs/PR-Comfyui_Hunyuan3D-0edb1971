@@ -5,7 +5,7 @@ import sys
 warnings.simplefilter('ignore', category=UserWarning)
 warnings.simplefilter('ignore', category=FutureWarning)
 warnings.simplefilter('ignore', category=DeprecationWarning)
-
+from huggingface_hub import snapshot_download
 import torch
 import numpy as np
 from einops import rearrange
@@ -56,47 +56,53 @@ class Hunyuan3DNode:
         self.worker_v23 = None
         self.worker_gif = None
 
+    @staticmethod
+    def download_model_files(repo_id: str, local_dir: str):
+        """
+        从 Huggingface 仓库下载所有文件到指定的本地目录。
+
+        :param repo_id: Huggingface 仓库的 ID，例如 "tencent/Hunyuan3D-1"
+        :param local_dir: 本地目标目录，例如 "weights"
+        """
+        print(f"模型文件未找到，正在从 Huggingface 仓库 {repo_id} 下载所有文件到 {local_dir} ...")
+        try:
+            snapshot_download(repo_id=repo_id, local_dir=local_dir, repo_type='model', ignore_patterns=["*.gitignore"])
+            print("模型文件下载完成。")
+        except Exception as e:
+            print(f"下载模型文件时出错: {e}")
+            raise
+
     def imgTo3D(self, image, seed, step, max_number_of_faces, do_texture_mapping, do_render_gif, use_lite):
-        # 检查输入的图像类型
         if not isinstance(image, Image.Image):
             if isinstance(image, torch.Tensor):
                 print(f"Original tensor shape: {image.shape}")
-                # 移除批次维度（如果存在）
                 if image.dim() == 4 and image.shape[0] == 1:
                     image = image.squeeze(0)
                     print(f"Squeezed tensor shape: {image.shape}")
-                # 检查图像维度是否为 [H, W, C]
                 if image.dim() == 3:
                     if image.shape[2] in [1, 3, 4]:
                         print(f"Image is in [H, W, C] format with shape: {image.shape}")
-                        # 图像已经是 [H, W, C]，不需要转置
                         pass
                     elif image.shape[0] in [1, 3, 4]:
                         print(f"Image is in [C, H, W] format with shape: {image.shape}")
-                        # 图像是 [C, H, W]，需要转置
                         image = image.permute(1, 2, 0)
                         print(f"Transposed image shape: {image.shape}")
                     else:
                         raise ValueError(f"Unsupported image shape: {image.shape}")
                 else:
                     raise ValueError(f"Unsupported image dimensions: {image.dim()}")
-                # 将 Tensor 转换为 NumPy 数组
                 image = image.cpu().numpy()
                 print(f"Converted to numpy array, shape: {image.shape}, dtype: {image.dtype}")
-                # 确保图像数据类型为 uint8，并调整像素值范围
                 if image.dtype in [np.float32, np.float64]:
                     image = np.clip(image * 255, 0, 255).astype(np.uint8)
                     print(f"Scaled image to uint8, dtype: {image.dtype}")
                 elif image.dtype == np.uint8:
                     print(f"Image is already uint8, dtype: {image.dtype}")
                 else:
-                    # 如果图像是其他整数类型，直接转换为 uint8
                     image = image.astype(np.uint8)
                     print(f"Converted image to uint8, dtype: {image.dtype}")
-                # 检查图像形状是否正确
                 if image.ndim != 3 or image.shape[2] not in [1, 3, 4]:
                     raise ValueError(f"Invalid image shape after processing: {image.shape}")
-                # 将 NumPy 数组转换为 PIL 图像
                 image = Image.fromarray(image)
                 print(f"Converted to PIL Image, size: {image.size}, mode: {image.mode}")
             else:
@@ -104,16 +110,27 @@ class Hunyuan3DNode:
         else:
             print(f"Input image is already a PIL Image, size: {image.size}, mode: {image.mode}")  
 
-        # 延迟加载模型
         base_dir = os.path.dirname(os.path.abspath(__file__))
+        weights_dir = os.path.join(base_dir, "weights")
+        svrm_dir = os.path.join(weights_dir, "svrm")
+        weights_path = os.path.join(svrm_dir, "svrm.safetensors")
+
+        # 检查模型权重文件是否存在
+        if not os.path.exists(weights_path):
+            print(f"未找到模型文件 {weights_path}，开始下载模型文件...")
+            repo_id = "tencent/Hunyuan3D-1"  # Huggingface 仓库 ID
+            self.download_model_files(repo_id=repo_id, local_dir=weights_dir)
+            # 检查下载后是否存在模型文件
+            if not os.path.exists(weights_path):
+                raise FileNotFoundError(f"下载后仍未找到模型文件 {weights_path}。请检查仓库 ID 或网络连接。")
+
         if self.worker_xbg is None:
             self.worker_xbg = Removebg()
         if self.worker_i2v is None:
             self.worker_i2v = Image2Views(
-                use_lite=use_lite,  # 使用新的参数
+                use_lite=use_lite,  
                 device=self.device
             )
-        # 生成绝对路径
         if use_lite:
             config_path = os.path.join(base_dir, "svrm/configs/svrm.yaml")
             weights_path = os.path.join(base_dir, "weights/svrm/svrm.safetensors")
@@ -121,18 +138,16 @@ class Hunyuan3DNode:
             config_path = os.path.join(base_dir, "svrm/configs/svrm.yaml")
             weights_path = os.path.join(base_dir, "weights/svrm/svrm.safetensors")
 
-        # 在原代码中使用生成的路径
         if self.worker_v23 is None:
             self.worker_v23 = Views2Mesh(
                 config_path,
                 weights_path,
-                use_lite=use_lite,  # 使用新的参数
+                use_lite=use_lite,  
                 device=self.device
             )
         if self.worker_gif is None:
             self.worker_gif = GifRenderer(self.device)
 
-        # 准备保存文件夹
         save_folder = self.prepare_save_folder()
 
         try:
