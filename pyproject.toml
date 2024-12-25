@@ -1,0 +1,14 @@
+[project]
+name = "comfyui_hunyuan3d"
+description = "NODES:TTP_Hunyuan3DNode, TTP_SquareImage, TTP_GIFViewer"
+version = "1.0.0"
+license = {file = "LICENSE"}
+
+[project.urls]
+Repository = "https://github.com/TTPlanetPig/Comfyui_Hunyuan3D"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "Comfyui_Hunyuan3D"
+Icon = ""
